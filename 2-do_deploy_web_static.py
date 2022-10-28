@@ -1,57 +1,48 @@
 #!/usr/bin/python3
 # Fabfile to distribute an archive to a web server.
-from fabric.operations import put, run, sudo
-import os
-from fabric.api import run, local, sudo, env
-from datetime import datetime
-
-
-dt = datetime.now()
+import os.path
+from fabric.api import env
+from fabric.api import put
+from fabric.api import run
 
 env.hosts = ["100.25.165.85", "18.214.89.119"]
 
 
-
-def do_pack():
-    """ Packs web_static files into .tgz file
-    """
-    file_name = 'versions/web_static_{}{}{}{}{}{}.tgz'.format(
-        dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
-    local('mkdir -p versions')
-    command = local("tar -cvzf " + file_name + " ./web_static/")
-    if command == 0:
-        return file_name
-    return None
-
-
 def do_deploy(archive_path):
-    """ deploy an archive from the archive_path
+    """Distributes an archive to a web server.
+    Args:
+        archive_path (str): The path of the archive to distribute.
+    Returns:
+        If the file doesn't exist at archive_path or an error occurs - False.
+        Otherwise - True.
     """
-    if os.path.exists(archive_path) is False:
+    if os.path.isfile(archive_path) is False:
         return False
-    file_name = os.path.splitext(os.path.split(archive_path)[1])[0]
-    target = '/data/web_static/releases/' + file_name
-    path = archive_path.split('/')[1]
-    try:
-        """put("{}/tmp/".format(archive_path))
-        run('sudo mkdir -p {}'.format(target))
-        run('sudo tar -xzf /tmp/{} -C {}/'.format(path, target))
-        run('sudo rm /tmp/{}'.format(path))
-        run('sudo mv {}/web_static/* {}/'.format(target, target))
-        run('sudo rm -rf {}/web_static'.format(target))
-        run('sudo rm -rf /data/web_static/current')
-        run('sudo ln -s {}/ /data/web_static/current'.format(target))"""
+    file = archive_path.split("/")[-1]
+    name = file.split(".")[0]
 
-        put(archive_path, "/tmp/")
-        run('sudo mkdir -p ' + target)
-        run('sudo tar -xzf /tmp/' + path + ' -C ' + target + '/')
-        run('sudo rm /tmp/' + path)
-        run('sudo mv ' + target + '/web_static/* ' + target + '/')
-        run('sudo rm -rf ' + target + '/web_static')
-        run('sudo rm -rf /data/web_static/current')
-        run('sudo ln -s ' + target + '/ /data/web_static/current')
-        print("New version deployed!")
-        return True
-    except:
+    if put(archive_path, "/tmp/{}".format(file)).failed is True:
         return False
-    
+    if run("rm -rf /data/web_static/releases/{}/".
+           format(name)).failed is True:
+        return False
+    if run("mkdir -p /data/web_static/releases/{}/".
+           format(name)).failed is True:
+        return False
+    if run("tar -xzf /tmp/{} -C /data/web_static/releases/{}/".
+           format(file, name)).failed is True:
+        return False
+    if run("rm /tmp/{}".format(file)).failed is True:
+        return False
+    if run("mv /data/web_static/releases/{}/web_static/* "
+           "/data/web_static/releases/{}/".format(name, name)).failed is True:
+        return False
+    if run("rm -rf /data/web_static/releases/{}/web_static".
+           format(name)).failed is True:
+        return False
+    if run("rm -rf /data/web_static/current").failed is True:
+        return False
+    if run("ln -s /data/web_static/releases/{}/ /data/web_static/current".
+           format(name)).failed is True:
+        return False
+    return True
